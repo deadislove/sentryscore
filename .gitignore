@@ -1,0 +1,17 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+
+# The IEEE-CIS Fraud Detection dataset is a ~1.3GB Kaggle *competition*
+# download (gated behind account acceptance) and isn't ours to
+# redistribute - see README for where train.py expects it (outside this
+# repo by default). If you point it at a local copy inside this repo
+# instead, keep it out of git:
+data/
+*.csv
+
+# The trained model/encoder ARE committed (small, and let people try the
+# API immediately without retraining first).
