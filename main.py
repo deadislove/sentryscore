@@ -30,7 +30,7 @@ FEATURE_COLUMNS = (
 )
 # Determined empirically by train.ipynb (string dtype after the
 # transaction/identity merge) - hardcoded here since this POC has no
-# model_registry.json to persist it in (see product/sentryscore for that).
+# model_registry.json to persist it in.
 CATEGORICAL_COLUMNS = [
     "ProductCD", "card4", "card6", "P_emaildomain", "R_emaildomain",
     "M1", "M2", "M3", "M4", "M5", "M6", "M7", "M8", "M9",

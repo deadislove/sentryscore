@@ -34,7 +34,7 @@ as seriously as the modeling itself:
 ## Quick start
 
 ```bash
-git clone <this-repo> && cd <this-repo>
+git clone https://github.com/deadislove/sentryscore.git && cd sentryscore
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
@@ -106,8 +106,7 @@ quick ML demo:
    frame before every prediction specifically to avoid that trap — and
    normalizes missing values to NaN *before* encoding, since a
    single-row DataFrame built from Python `None` silently becomes
-   `object` dtype instead of a real float NaN (a real bug this project
-   hit and fixed, not a hypothetical).
+   `object` dtype instead of a real float NaN.
 3. **Categorical encoding, not scaling, is the transform that matters
    here.** Unlike a from-scratch logistic regression, LightGBM is
    tree-based and scale-invariant — no `StandardScaler` needed. What it
