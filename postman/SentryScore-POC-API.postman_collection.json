@@ -1,0 +1,183 @@
+{
+  "info": {
+    "_postman_id": "1ed5aa61-c285-45a8-8b52-82d00214ec92",
+    "name": "SentryScore POC API",
+    "description": "Real-time fraud scoring for a single credit-card transaction.\n\nThis is a proof-of-concept inference API (FastAPI + LightGBM) trained on Kaggle's public \"IEEE-CIS Fraud Detection\" competition dataset (`train_transaction.csv` + `train_identity.csv`, left-joined on `TransactionID`). It has not been validated against real transaction data — see `docs/business-domain-knowhow/README.md` in the repository before relying on any number here for more than evaluation.\n\nThe threshold (`BLOCK_THRESHOLD = 0.2891` in `main.py`) is the F1-optimal cutoff on this model's own validation split — a real derivation, but a statistical one, not a cost-calibrated business decision.\n\n## Request fields\n\n| Field | Type | Required | Source column | Meaning |\n|---|---|---|---|---|\n| `transaction_amt` | number &ge; 0 | yes | `TransactionAmt` | Transaction payment amount, in USD. |\n| `product_cd` | string | yes | `ProductCD` | Product/category code purchased. Observed values: `W`, `C`, `R`, `H`, `S` — individual meaning not disclosed by Vesta. |\n| `card.card1` | number\\|null | yes (object) | `card1` | Anonymized numeric card-issuer identifier; exact encoding undisclosed by Vesta. |\n| `card.card2` | number\\|null | | `card2` | Anonymized numeric card-related identifier; encoding undisclosed. |\n| `card.card3` | number\\|null | | `card3` | Anonymized numeric card-related identifier; encoding undisclosed. |\n| `card.card4` | string\\|null | | `card4` | Card payment network — e.g. \"visa\", \"mastercard\", \"american express\", \"discover\". |\n| `card.card5` | number\\|null | | `card5` | Anonymized numeric card-related identifier; encoding undisclosed. |\n| `card.card6` | string\\|null | | `card6` | Card funding type — e.g. \"debit\", \"credit\". |\n| `addr1` | number\\|null | no | `addr1` | Billing-address region code. Not individually documented by Vesta. |\n| `addr2` | number\\|null | no | `addr2` | Billing-address country code. Same disclosure caveat as `addr1`. |\n| `dist1` | number\\|null | no | `dist1` | A distance-type signal (e.g. billing vs. shipping address). Exact definition undisclosed. |\n| `dist2` | number\\|null | no | `dist2` | A second distance-type signal. Same caveat as `dist1`. |\n| `p_email_domain` | string\\|null | no | `P_emaildomain` | Purchaser's email domain, e.g. \"gmail.com\". |\n| `r_email_domain` | string\\|null | no | `R_emaildomain` | Recipient's email domain, when known. |\n| `velocity_counts` | (number\\|null)[14] | yes | `C1`-`C14` | Vesta-engineered count features (e.g. \"how many addresses are found to be associated with the payment card\"). Individual columns undisclosed. Exactly 14 values, in order. |\n| `time_deltas` | (number\\|null)[15] | yes | `D1`-`D15` | Vesta-engineered time-delta features (e.g. \"days between previous transaction\"). Individual columns undisclosed. Exactly 15 values, in order. |\n| `match_flags` | (string\\|null)[9] | yes | `M1`-`M9` | Vesta-engineered match flags (e.g. \"names on card and address\"), typically `\"T\"`/`\"F\"`/null. Individual columns undisclosed. Exactly 9 values, in order. |\n| `vesta_features` | (number\\|null)[339] | yes | `V1`-`V339` | Vesta's proprietary engineered features (\"ranking, counting, and other entity relations\"). Largest, least interpretable input block. Exactly 339 values, in order. |\n| `identity` | object or omitted | no | `train_identity.csv` (left-joined on `TransactionID`) | Device/network signals. Present for only ~24% of transactions in training data — omit this entire field (don't send null sub-fields) when absent. |\n| `identity.device_type` | string\\|null | | `DeviceType` | e.g. \"mobile\", \"desktop\". |\n| `identity.device_info` | string\\|null | | `DeviceInfo` | Free-text device/browser string, e.g. \"Windows\", \"iOS Device\". |\n| `identity.identity_features` | (number\\|string\\|null)[38] | yes (within `identity`) | `id_01`-`id_38` | Network/device fingerprinting signals (IP/ISP/proxy, browser/OS fingerprint) collected by Vesta's fraud-protection partners. Individual columns undisclosed. Exactly 38 values, in order. |\n\n## Response fields (200)\n\n| Field | Type | Meaning |\n|---|---|---|\n| `fraud_probability` | number, 0-1 | `model.predict_proba(...)[0][1]`, rounded to 4 decimals. Research-quality number from a public dataset — not a calibrated real-world risk score. |\n| `is_blocked` | boolean | `true` when `fraud_probability` > `BLOCK_THRESHOLD` (0.2891, hardcoded in `main.py`). |\n| `action` | `\"PASS\"` \\| `\"BLOCK\"` | Human-readable restatement of `is_blocked`. |\n\n## Validation error fields (422)\n\n| Field | Meaning |\n|---|---|\n| `detail[].loc` | Path to the invalid field, e.g. `[\"body\", \"vesta_features\"]`. |\n| `detail[].msg` | Human-readable description of what failed validation. |\n| `detail[].type` | Machine-readable error category, e.g. `\"too_short\"`, `\"missing\"`, `\"greater_than_equal\"`. |\n",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Score a transaction for fraud risk",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"transaction_amt\": 49,\n  \"product_cd\": \"W\",\n  \"card\": {\n    \"card1\": 5000,\n    \"card2\": 400,\n    \"card3\": 150,\n    \"card4\": \"visa\",\n    \"card5\": 226,\n    \"card6\": \"debit\"\n  },\n  \"addr1\": 315,\n  \"addr2\": 87,\n  \"dist1\": 10,\n  \"dist2\": null,\n  \"p_email_domain\": \"gmail.com\",\n  \"r_email_domain\": null,\n  \"velocity_counts\": [\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1\n  ],\n  \"time_deltas\": [\n    0,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null\n  ],\n  \"match_flags\": [\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\"\n  ],\n  \"vesta_features\": [\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{baseUrl}}/predict",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "predict"
+          ]
+        },
+        "description": "Real-time fraud scoring for a single credit-card transaction.\n\nThis is a proof-of-concept inference API (FastAPI + LightGBM) trained on Kaggle's public \"IEEE-CIS Fraud Detection\" competition dataset (`train_transaction.csv` + `train_identity.csv`, left-joined on `TransactionID`). It has not been validated against real transaction data — see `docs/business-domain-knowhow/README.md` in the repository before relying on any number here for more than evaluation.\n\nThe threshold (`BLOCK_THRESHOLD = 0.2891` in `main.py`) is the F1-optimal cutoff on this model's own validation split — a real derivation, but a statistical one, not a cost-calibrated business decision.\n\n## Request fields\n\n| Field | Type | Required | Source column | Meaning |\n|---|---|---|---|---|\n| `transaction_amt` | number &ge; 0 | yes | `TransactionAmt` | Transaction payment amount, in USD. |\n| `product_cd` | string | yes | `ProductCD` | Product/category code purchased. Observed values: `W`, `C`, `R`, `H`, `S` — individual meaning not disclosed by Vesta. |\n| `card.card1` | number\\|null | yes (object) | `card1` | Anonymized numeric card-issuer identifier; exact encoding undisclosed by Vesta. |\n| `card.card2` | number\\|null | | `card2` | Anonymized numeric card-related identifier; encoding undisclosed. |\n| `card.card3` | number\\|null | | `card3` | Anonymized numeric card-related identifier; encoding undisclosed. |\n| `card.card4` | string\\|null | | `card4` | Card payment network — e.g. \"visa\", \"mastercard\", \"american express\", \"discover\". |\n| `card.card5` | number\\|null | | `card5` | Anonymized numeric card-related identifier; encoding undisclosed. |\n| `card.card6` | string\\|null | | `card6` | Card funding type — e.g. \"debit\", \"credit\". |\n| `addr1` | number\\|null | no | `addr1` | Billing-address region code. Not individually documented by Vesta. |\n| `addr2` | number\\|null | no | `addr2` | Billing-address country code. Same disclosure caveat as `addr1`. |\n| `dist1` | number\\|null | no | `dist1` | A distance-type signal (e.g. billing vs. shipping address). Exact definition undisclosed. |\n| `dist2` | number\\|null | no | `dist2` | A second distance-type signal. Same caveat as `dist1`. |\n| `p_email_domain` | string\\|null | no | `P_emaildomain` | Purchaser's email domain, e.g. \"gmail.com\". |\n| `r_email_domain` | string\\|null | no | `R_emaildomain` | Recipient's email domain, when known. |\n| `velocity_counts` | (number\\|null)[14] | yes | `C1`-`C14` | Vesta-engineered count features (e.g. \"how many addresses are found to be associated with the payment card\"). Individual columns undisclosed. Exactly 14 values, in order. |\n| `time_deltas` | (number\\|null)[15] | yes | `D1`-`D15` | Vesta-engineered time-delta features (e.g. \"days between previous transaction\"). Individual columns undisclosed. Exactly 15 values, in order. |\n| `match_flags` | (string\\|null)[9] | yes | `M1`-`M9` | Vesta-engineered match flags (e.g. \"names on card and address\"), typically `\"T\"`/`\"F\"`/null. Individual columns undisclosed. Exactly 9 values, in order. |\n| `vesta_features` | (number\\|null)[339] | yes | `V1`-`V339` | Vesta's proprietary engineered features (\"ranking, counting, and other entity relations\"). Largest, least interpretable input block. Exactly 339 values, in order. |\n| `identity` | object or omitted | no | `train_identity.csv` (left-joined on `TransactionID`) | Device/network signals. Present for only ~24% of transactions in training data — omit this entire field (don't send null sub-fields) when absent. |\n| `identity.device_type` | string\\|null | | `DeviceType` | e.g. \"mobile\", \"desktop\". |\n| `identity.device_info` | string\\|null | | `DeviceInfo` | Free-text device/browser string, e.g. \"Windows\", \"iOS Device\". |\n| `identity.identity_features` | (number\\|string\\|null)[38] | yes (within `identity`) | `id_01`-`id_38` | Network/device fingerprinting signals (IP/ISP/proxy, browser/OS fingerprint) collected by Vesta's fraud-protection partners. Individual columns undisclosed. Exactly 38 values, in order. |\n\n## Response fields (200)\n\n| Field | Type | Meaning |\n|---|---|---|\n| `fraud_probability` | number, 0-1 | `model.predict_proba(...)[0][1]`, rounded to 4 decimals. Research-quality number from a public dataset — not a calibrated real-world risk score. |\n| `is_blocked` | boolean | `true` when `fraud_probability` > `BLOCK_THRESHOLD` (0.2891, hardcoded in `main.py`). |\n| `action` | `\"PASS\"` \\| `\"BLOCK\"` | Human-readable restatement of `is_blocked`. |\n\n## Validation error fields (422)\n\n| Field | Meaning |\n|---|---|\n| `detail[].loc` | Path to the invalid field, e.g. `[\"body\", \"vesta_features\"]`. |\n| `detail[].msg` | Human-readable description of what failed validation. |\n| `detail[].type` | Machine-readable error category, e.g. `\"too_short\"`, `\"missing\"`, `\"greater_than_equal\"`. |\n"
+      },
+      "response": [
+        {
+          "name": "200 - low fraud probability (PASS)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_amt\": 49,\n  \"product_cd\": \"W\",\n  \"card\": {\n    \"card1\": 5000,\n    \"card2\": 400,\n    \"card3\": 150,\n    \"card4\": \"visa\",\n    \"card5\": 226,\n    \"card6\": \"debit\"\n  },\n  \"addr1\": 315,\n  \"addr2\": 87,\n  \"dist1\": 10,\n  \"dist2\": null,\n  \"p_email_domain\": \"gmail.com\",\n  \"r_email_domain\": null,\n  \"velocity_counts\": [\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1\n  ],\n  \"time_deltas\": [\n    0,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null\n  ],\n  \"match_flags\": [\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\"\n  ],\n  \"vesta_features\": [\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/predict",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "predict"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"fraud_probability\": 0.0014,\n  \"is_blocked\": false,\n  \"action\": \"PASS\"\n}"
+        },
+        {
+          "name": "200 - high fraud probability (BLOCK)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_amt\": 49,\n  \"product_cd\": \"W\",\n  \"card\": {\n    \"card1\": 5000,\n    \"card2\": 400,\n    \"card3\": 150,\n    \"card4\": \"visa\",\n    \"card5\": 226,\n    \"card6\": \"debit\"\n  },\n  \"addr1\": 315,\n  \"addr2\": 87,\n  \"dist1\": 10,\n  \"dist2\": null,\n  \"p_email_domain\": \"gmail.com\",\n  \"r_email_domain\": null,\n  \"velocity_counts\": [\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1\n  ],\n  \"time_deltas\": [\n    0,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null\n  ],\n  \"match_flags\": [\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\"\n  ],\n  \"vesta_features\": [\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/predict",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "predict"
+              ]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"fraud_probability\": 0.9999,\n  \"is_blocked\": true,\n  \"action\": \"BLOCK\"\n}"
+        },
+        {
+          "name": "422 - wrong array length (validation error)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Accept",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"transaction_amt\": 49,\n  \"product_cd\": \"W\",\n  \"card\": {\n    \"card1\": 5000,\n    \"card2\": 400,\n    \"card3\": 150,\n    \"card4\": \"visa\",\n    \"card5\": 226,\n    \"card6\": \"debit\"\n  },\n  \"addr1\": 315,\n  \"addr2\": 87,\n  \"dist1\": 10,\n  \"dist2\": null,\n  \"p_email_domain\": \"gmail.com\",\n  \"r_email_domain\": null,\n  \"velocity_counts\": [\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1\n  ],\n  \"time_deltas\": [\n    0,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null,\n    null\n  ],\n  \"match_flags\": [\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\",\n    \"T\"\n  ],\n  \"vesta_features\": [\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1,\n    1\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/predict",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "predict"
+              ]
+            }
+          },
+          "status": "Unprocessable Entity",
+          "code": 422,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"detail\": [\n    {\n      \"loc\": [\n        \"body\",\n        \"vesta_features\"\n      ],\n      \"msg\": \"List should have at least 339 items after validation, not 338\",\n      \"type\": \"too_short\"\n    }\n  ]\n}"
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000",
+      "type": "string"
+    }
+  ]
+}

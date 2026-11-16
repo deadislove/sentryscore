@@ -3,7 +3,7 @@
 This folder has two documents, written for two different readers:
 
 - [`business-domain-knowhow/`](business-domain-knowhow/README.md) — for anyone who wants to understand what problem this solves and what the score/threshold actually mean. No code reading required.
-- [`technical/`](technical/README.md) — for engineers who need to maintain this code, retrain the model, or carry this POC toward a real service.
+- [`technical/`](technical/README.md) — for engineers who need to maintain this code, retrain the model, or carry this POC toward a real service. Includes a full field-by-field [API reference](technical/api-reference.md) for the `/predict` endpoint.
 
 If you just want to get it running, the root [`README.md`](../README.md) has install steps and a curl example you can paste straight into a terminal.
 

@@ -1,0 +1,19 @@
+$kind: collection
+description: |
+  Real-time fraud scoring for a single credit-card transaction.
+
+  This is a proof-of-concept inference API (FastAPI + LightGBM) trained on
+  Kaggle's public "IEEE-CIS Fraud Detection" competition dataset
+  (`train_transaction.csv` + `train_identity.csv`, left-joined on
+  `TransactionID`). It has not been validated against real transaction
+  data — see `docs/business-domain-knowhow/README.md` in the repository
+  before relying on any number here for more than evaluation.
+
+  Most request fields map 1:1 to a named column in that dataset. Four
+  groups (`velocity_counts`, `time_deltas`, `match_flags`,
+  `vesta_features`) and the identity feature block remain anonymized
+  because Vesta, the dataset's provider, never disclosed what each
+  individual column in them measures — this spec says so explicitly
+  rather than inventing plausible-sounding names.
+variables:
+  baseUrl: http://127.0.0.1:8000

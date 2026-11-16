@@ -1,0 +1,5 @@
+workspace:
+  id: ""
+resourceNameMappings:
+  specs:
+    - ../postman/specs/sentryscore/index.yaml: SentryScore POC API

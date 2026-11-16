@@ -53,6 +53,8 @@ The request shape mirrors the training data's columns. Most of it is named busin
 
 These lengths are enforced with Pydantic's `Field(..., min_length=..., max_length=...)` — send the wrong length and you get a 422 immediately, rather than the request limping forward with misaligned data. `identity` can be omitted entirely: most transactions genuinely have no identity data, and sending a fully-null object isn't semantically the same thing as not sending one at all, so this contract lets the latter case say so explicitly.
 
+For what every single field means and which source column it came from, see [`api-reference.md`](api-reference.md). The same contract also exists as a runnable Postman collection and OpenAPI spec under [`../../postman/`](../../postman/) — `postman/SentryScore-POC-API.postman_collection.json` imports directly into Postman if you'd rather click through requests than read a table.
+
 Response:
 
 ```json

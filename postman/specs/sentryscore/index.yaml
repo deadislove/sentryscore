@@ -1,0 +1,316 @@
+openapi: 3.1.0
+info:
+  title: SentryScore POC API
+  version: 0.1.0
+  description: |
+    Real-time fraud scoring for a single credit-card transaction.
+
+    This is a proof-of-concept inference API (FastAPI + LightGBM) trained on
+    Kaggle's public "IEEE-CIS Fraud Detection" competition dataset
+    (`train_transaction.csv` + `train_identity.csv`, left-joined on
+    `TransactionID`). It has not been validated against real transaction
+    data — see `docs/business-domain-knowhow/README.md` in the repository
+    before relying on any number here for more than evaluation.
+
+    Most request fields map 1:1 to a named column in that dataset. Four
+    groups (`velocity_counts`, `time_deltas`, `match_flags`,
+    `vesta_features`) and the identity feature block remain anonymized
+    because Vesta, the dataset's provider, never disclosed what each
+    individual column in them measures — this spec says so explicitly
+    rather than inventing plausible-sounding names.
+  license:
+    name: MIT
+servers:
+  - url: http://127.0.0.1:8000
+    description: Local development server (uvicorn main:app --reload --port 8000)
+paths:
+  /predict:
+    post:
+      operationId: predictFraud
+      summary: Score a single transaction for fraud risk
+      description: |
+        Scores one transaction and returns a fraud probability plus a
+        PASS/BLOCK decision against a fixed threshold. The threshold
+        (`BLOCK_THRESHOLD = 0.2891` in `main.py`) is the F1-optimal cutoff
+        on this model's own validation split — a real derivation, but a
+        statistical one, not a cost-calibrated business decision. See
+        `docs/business-domain-knowhow/README.md` for that distinction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionInput'
+            examples:
+              noIdentityData:
+                summary: Typical transaction — no identity object (the common case)
+                description: >-
+                  Most real transactions have no matching identity record
+                  (only ~24% do in the training data), so `identity` is
+                  omitted entirely rather than sent as null.
+                value:
+                  transaction_amt: 49.0
+                  product_cd: "W"
+                  card:
+                    card1: 5000
+                    card2: 400
+                    card3: 150
+                    card4: "visa"
+                    card5: 226
+                    card6: "debit"
+                  addr1: 315
+                  addr2: 87
+                  dist1: 10
+                  dist2: null
+                  p_email_domain: "gmail.com"
+                  r_email_domain: null
+                  velocity_counts: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+                  time_deltas: [0, null, null, null, null, null, null, null, null, null, null, null, null, null, null]
+                  match_flags: ["T", "T", "T", "T", "T", "T", "T", "T", "T"]
+                  vesta_features: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+      responses:
+        '200':
+          description: >-
+            Scored successfully. Returned for every syntactically valid
+            request — a low `fraud_probability` is not an error condition.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PredictResponse'
+              examples:
+                pass:
+                  summary: Low fraud probability — allowed
+                  value: { "fraud_probability": 0.0014, "is_blocked": false, "action": "PASS" }
+                block:
+                  summary: High fraud probability — blocked
+                  value: { "fraud_probability": 0.9999, "is_blocked": true, "action": "BLOCK" }
+        '422':
+          description: >-
+            Request failed schema validation — e.g. a grouped array is the
+            wrong length, `transaction_amt` is negative, or a required
+            field is missing. Standard FastAPI/Pydantic error shape.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+              examples:
+                wrongArrayLength:
+                  summary: vesta_features sent with 338 items instead of 339
+                  value:
+                    detail:
+                      - loc: ["body", "vesta_features"]
+                        msg: "List should have at least 339 items after validation, not 338"
+                        type: "too_short"
+components:
+  schemas:
+    CardInfo:
+      type: object
+      description: >-
+        Card network/issuer fields. Source: IEEE-CIS `train_transaction.csv`
+        columns `card1`-`card6`. Vesta documented the high-level category of
+        each column but not the individual encoding for the numeric ones.
+      properties:
+        card1:
+          type: ["number", "null"]
+          description: Source column `card1`. Anonymized numeric card-issuer identifier; exact encoding undisclosed by Vesta.
+        card2:
+          type: ["number", "null"]
+          description: Source column `card2`. Anonymized numeric card-related identifier; exact encoding undisclosed by Vesta.
+        card3:
+          type: ["number", "null"]
+          description: Source column `card3`. Anonymized numeric card-related identifier; exact encoding undisclosed by Vesta.
+        card4:
+          type: ["string", "null"]
+          description: Source column `card4`. Card payment network — observed values include "visa", "mastercard", "american express", "discover".
+        card5:
+          type: ["number", "null"]
+          description: Source column `card5`. Anonymized numeric card-related identifier; exact encoding undisclosed by Vesta.
+        card6:
+          type: ["string", "null"]
+          description: Source column `card6`. Card funding type — observed values include "debit", "credit".
+    IdentityInfo:
+      type: object
+      description: >-
+        Device/network signals from IEEE-CIS `train_identity.csv`,
+        left-joined onto the transaction table on `TransactionID`. Present
+        for only ~24% of transactions in the training data. Omit this whole
+        object (do not send it with null fields) when no identity data was
+        captured for a transaction — that is the common case, not an edge
+        case.
+      required: [identity_features]
+      properties:
+        device_type:
+          type: ["string", "null"]
+          description: Source column `DeviceType`. Observed values include "mobile", "desktop".
+        device_info:
+          type: ["string", "null"]
+          description: Source column `DeviceInfo`. Free-text device/browser string, e.g. "Windows", "iOS Device", "SM-G900P".
+        identity_features:
+          type: array
+          minItems: 38
+          maxItems: 38
+          items:
+            type: ["number", "string", "null"]
+          description: >-
+            Maps positionally to `id_01` through `id_38` from
+            `train_identity.csv` — exactly 38 values, in that order, with
+            `null` for an unknown value at a given position (never omit a
+            position). These are network/device fingerprinting signals
+            (IP/ISP/proxy information, browser and OS fingerprint, digital
+            signature) collected by Vesta's fraud-protection partners.
+            Individual column meanings were not disclosed, to protect the
+            underlying detection method.
+    TransactionInput:
+      type: object
+      required:
+        - transaction_amt
+        - product_cd
+        - card
+        - velocity_counts
+        - time_deltas
+        - match_flags
+        - vesta_features
+      properties:
+        transaction_amt:
+          type: number
+          minimum: 0
+          description: Source column `TransactionAmt`. Transaction payment amount, in USD.
+        product_cd:
+          type: string
+          description: >-
+            Source column `ProductCD`. Product/category code for what was
+            purchased. Observed values in the training data: "W", "C", "R",
+            "H", "S" — what each code stands for was not individually
+            disclosed by Vesta.
+        card:
+          $ref: '#/components/schemas/CardInfo'
+        addr1:
+          type: ["number", "null"]
+          description: >-
+            Source column `addr1`. Billing-address region code. Vesta did
+            not publish an exact definition; the competition's public
+            discussion treats it as a region-level billing-address signal.
+        addr2:
+          type: ["number", "null"]
+          description: >-
+            Source column `addr2`. Billing-address country code, same
+            disclosure caveat as `addr1`.
+        dist1:
+          type: ["number", "null"]
+          description: >-
+            Source column `dist1`. A distance-type signal (e.g. between
+            billing and shipping address, or billing address and IP
+            location) — exact definition not disclosed by Vesta.
+        dist2:
+          type: ["number", "null"]
+          description: Source column `dist2`. A second distance-type signal; same disclosure caveat as `dist1`.
+        p_email_domain:
+          type: ["string", "null"]
+          description: Source column `P_emaildomain`. Purchaser's email domain, e.g. "gmail.com".
+        r_email_domain:
+          type: ["string", "null"]
+          description: Source column `R_emaildomain`. Recipient's email domain, when known.
+        velocity_counts:
+          type: array
+          minItems: 14
+          maxItems: 14
+          items:
+            type: ["number", "null"]
+          description: >-
+            Maps positionally to `C1`-`C14` from `train_transaction.csv` —
+            exactly 14 values, in that order. Vesta-engineered count
+            features; per the competition's public documentation,
+            "counting, such as how many addresses are found to be
+            associated with the payment card." Individual column
+            definitions were not disclosed.
+        time_deltas:
+          type: array
+          minItems: 15
+          maxItems: 15
+          items:
+            type: ["number", "null"]
+          description: >-
+            Maps positionally to `D1`-`D15` — exactly 15 values, in that
+            order. Vesta-engineered time-delta features; per the
+            competition's public documentation, "timedelta, such as days
+            between previous transaction." Individual column definitions
+            were not disclosed.
+        match_flags:
+          type: array
+          minItems: 9
+          maxItems: 9
+          items:
+            type: ["string", "null"]
+          description: >-
+            Maps positionally to `M1`-`M9` — exactly 9 values, in that
+            order, typically "T", "F", or null in the raw dataset.
+            Vesta-engineered match flags; per the competition's public
+            documentation, "match, such as names on card and address."
+            Individual column definitions were not disclosed.
+        vesta_features:
+          type: array
+          minItems: 339
+          maxItems: 339
+          items:
+            type: ["number", "null"]
+          description: >-
+            Maps positionally to `V1`-`V339` — exactly 339 values, in that
+            order. Vesta's proprietary engineered features; per the
+            competition's public documentation, "rich features, including
+            ranking, counting, and other entity relations." This is the
+            largest and least interpretable input block — individual
+            column definitions were not disclosed.
+        identity:
+          oneOf:
+            - $ref: '#/components/schemas/IdentityInfo'
+            - type: "null"
+          description: >-
+            Omit this field entirely (do not send it as null) when no
+            identity data was captured for the transaction — true for
+            roughly 76% of transactions in the training data. See
+            `IdentityInfo` for what it carries when present.
+    PredictResponse:
+      type: object
+      required: [fraud_probability, is_blocked, action]
+      properties:
+        fraud_probability:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: >-
+            The model's estimated probability that this transaction is
+            fraudulent — `model.predict_proba(...)[0][1]`, rounded to 4
+            decimal places. This is a research-quality number from a public
+            competition dataset, not a calibrated real-world risk score.
+        is_blocked:
+          type: boolean
+          description: >-
+            `true` when `fraud_probability` is greater than
+            `BLOCK_THRESHOLD` (0.2891, hardcoded in `main.py`). That
+            threshold is the F1-optimal cutoff on this model's own
+            validation split — a statistical result, not a
+            business-calibrated decision.
+        action:
+          type: string
+          enum: ["PASS", "BLOCK"]
+          description: Human-readable restatement of `is_blocked` — "BLOCK" when `is_blocked` is true, otherwise "PASS".
+    HTTPValidationError:
+      type: object
+      description: Standard FastAPI/Pydantic validation error shape.
+      properties:
+        detail:
+          type: array
+          items:
+            type: object
+            properties:
+              loc:
+                type: array
+                items:
+                  type: string
+                description: Path to the invalid field, e.g. ["body", "vesta_features"].
+              msg:
+                type: string
+                description: Human-readable description of what failed validation.
+              type:
+                type: string
+                description: Machine-readable error category, e.g. "too_short", "missing", "greater_than_equal".

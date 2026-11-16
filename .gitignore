@@ -15,3 +15,8 @@ data/
 
 # The trained model/encoder ARE committed (small, and let people try the
 # API immediately without retraining first).
+
+# Postman CLI scaffolding: generic agent-skill reference docs, not
+# project content - not relevant to anyone reading this repo.
+postman/skills/
+AGENTS.md

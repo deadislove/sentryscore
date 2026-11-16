@@ -1,0 +1,4 @@
+workflows:
+  syncSpecToCollection:
+    - spec: ../postman/specs/sentryscore/index.yaml
+      collection: ../postman/collections/SentryScore POC API
