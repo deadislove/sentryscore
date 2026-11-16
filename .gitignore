@@ -20,3 +20,7 @@ data/
 # project content - not relevant to anyone reading this repo.
 postman/skills/
 AGENTS.md
+
+# Postman CLI's own local state (workspace/resource links) - machine-
+# specific, not something other contributors should pull in.
+.postman/
